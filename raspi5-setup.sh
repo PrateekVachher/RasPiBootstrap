@@ -14,12 +14,12 @@ echo " Raspberry Pi 5 Setup Script"
 echo "========================================="
 
 # --- 1. System Updates & Upgrades ---
-echo "[1/8] Updating and upgrading system..."
+echo "[1/9] Updating and upgrading system..."
 apt update -y && apt full-upgrade -y && apt dist-upgrade -y
 apt autoremove -y && apt autoclean -y
 
 # --- 2. Overclocking & Fan Config in /boot/firmware/config.txt ---
-echo "[2/8] Applying overclock and fan settings to /boot/firmware/config.txt..."
+echo "[2/9] Applying overclock and fan settings to /boot/firmware/config.txt..."
 CONFIG="/boot/firmware/config.txt"
 
 # Remove existing overclock lines to avoid duplicates
@@ -39,7 +39,7 @@ EOF
 echo "Overclock settings written to $CONFIG"
 
 # --- 3. Set CPU Governor to Performance ---
-echo "[3/8] Setting CPU governor to performance..."
+echo "[3/9] Setting CPU governor to performance..."
 echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 
 # Make it persistent across reboots
@@ -60,7 +60,7 @@ systemctl daemon-reload
 systemctl enable cpu-performance.service
 
 # --- 4. Fan to Full Speed ---
-echo "[4/8] Setting fan to full speed..."
+echo "[4/9] Setting fan to full speed..."
 pinctrl FAN_PWM op dl
 
 # Make fan setting persistent
@@ -81,11 +81,11 @@ systemctl daemon-reload
 systemctl enable fan-full-speed.service
 
 # --- 5. Install btop ---
-echo "[5/8] Installing btop..."
+echo "[5/9] Installing btop..."
 apt install -y btop
 
 # --- 6. Install Latest Node.js (LTS via NodeSource) ---
-echo "[6/8] Installing latest Node.js LTS..."
+echo "[6/9] Installing latest Node.js LTS..."
 apt remove -y nodejs npm 2>/dev/null || true
 curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 apt install -y nodejs
@@ -93,7 +93,7 @@ echo "Node.js version: $(node --version)"
 echo "npm version: $(npm --version)"
 
 # --- 7. Remove Bloatware & Firefox ---
-echo "[7/8] Removing Firefox and unnecessary software..."
+echo "[7/9] Removing Firefox and unnecessary software..."
 apt purge -y firefox-esr firefox 2>/dev/null || true
 apt purge -y \
   libreoffice* \
@@ -126,7 +126,7 @@ apt purge -y \
 apt autoremove -y && apt autoclean -y
 
 # --- 8. Install Docker ---
-echo "[8/8] Installing Docker..."
+echo "[8/9] Installing Docker..."
 curl -fsSL https://get.docker.com | bash
 usermod -aG docker pi 2>/dev/null || true
 # Add the current sudo user to docker group as well
@@ -141,6 +141,18 @@ echo "Docker version: $(docker --version)"
 apt install -y docker-compose-plugin 2>/dev/null || true
 echo "Docker Compose version: $(docker compose version 2>/dev/null || echo 'not installed separately, included in Docker')"
 
+# --- 9. Install Homebrew ---
+echo "[9/9] Installing Homebrew..."
+BREW_USER="${SUDO_USER:-pi}"
+apt install -y build-essential
+su - "$BREW_USER" -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+# Add Homebrew to the user's PATH
+BREW_HOME="/home/$BREW_USER"
+su - "$BREW_USER" -c "echo >> $BREW_HOME/.bashrc"
+su - "$BREW_USER" -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)\"' >> $BREW_HOME/.bashrc"
+su - "$BREW_USER" -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)" && brew install gcc'
+echo "Homebrew installed for user $BREW_USER"
+
 echo ""
 echo "========================================="
 echo " Setup Complete!"
@@ -149,7 +161,7 @@ echo ""
 echo " Overclock: arm_freq=3000, gpu_freq=1000, over_voltage_delta=50000"
 echo " CPU Governor: performance (persistent)"
 echo " Fan: full speed (persistent)"
-echo " Installed: btop, Node.js $(node --version), Docker"
+echo " Installed: btop, Node.js $(node --version), Docker, Homebrew"
 echo " Removed: Firefox, LibreOffice, bloatware"
 echo ""
 echo " Ready for: Home Assistant & OpenClaw (via Docker)"
