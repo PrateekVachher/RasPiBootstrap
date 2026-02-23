@@ -14,12 +14,12 @@ echo " Raspberry Pi 5 Setup Script"
 echo "========================================="
 
 # --- 1. System Updates & Upgrades ---
-echo "[1/9] Updating and upgrading system..."
+echo "[1/10] Updating and upgrading system..."
 apt update -y && apt full-upgrade -y && apt dist-upgrade -y
 apt autoremove -y && apt autoclean -y
 
 # --- 2. Overclocking & Fan Config in /boot/firmware/config.txt ---
-echo "[2/9] Applying overclock and fan settings to /boot/firmware/config.txt..."
+echo "[2/10] Applying overclock and fan settings to /boot/firmware/config.txt..."
 CONFIG="/boot/firmware/config.txt"
 
 # Remove existing overclock lines to avoid duplicates
@@ -39,7 +39,7 @@ EOF
 echo "Overclock settings written to $CONFIG"
 
 # --- 3. Set CPU Governor to Performance ---
-echo "[3/9] Setting CPU governor to performance..."
+echo "[3/10] Setting CPU governor to performance..."
 echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 
 # Make it persistent across reboots
@@ -60,7 +60,7 @@ systemctl daemon-reload
 systemctl enable cpu-performance.service
 
 # --- 4. Fan to Full Speed ---
-echo "[4/9] Setting fan to full speed..."
+echo "[4/10] Setting fan to full speed..."
 pinctrl FAN_PWM op dl
 
 # Make fan setting persistent
@@ -81,11 +81,11 @@ systemctl daemon-reload
 systemctl enable fan-full-speed.service
 
 # --- 5. Install btop ---
-echo "[5/9] Installing btop..."
+echo "[5/10] Installing btop..."
 apt install -y btop
 
 # --- 6. Install Latest Node.js (LTS via NodeSource) ---
-echo "[6/9] Installing latest Node.js LTS..."
+echo "[6/10] Installing latest Node.js LTS..."
 apt remove -y nodejs npm 2>/dev/null || true
 curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 apt install -y nodejs
@@ -93,7 +93,7 @@ echo "Node.js version: $(node --version)"
 echo "npm version: $(npm --version)"
 
 # --- 7. Remove Bloatware & Firefox ---
-echo "[7/9] Removing Firefox and unnecessary software..."
+echo "[7/10] Removing Firefox and unnecessary software..."
 apt purge -y firefox-esr firefox 2>/dev/null || true
 apt purge -y \
   libreoffice* \
@@ -126,7 +126,7 @@ apt purge -y \
 apt autoremove -y && apt autoclean -y
 
 # --- 8. Install Docker ---
-echo "[8/9] Installing Docker..."
+echo "[8/10] Installing Docker..."
 curl -fsSL https://get.docker.com | bash
 usermod -aG docker pi 2>/dev/null || true
 # Add the current sudo user to docker group as well
@@ -141,8 +141,47 @@ echo "Docker version: $(docker --version)"
 apt install -y docker-compose-plugin 2>/dev/null || true
 echo "Docker Compose version: $(docker compose version 2>/dev/null || echo 'not installed separately, included in Docker')"
 
-# --- 9. Install Homebrew ---
-echo "[9/9] Installing Homebrew..."
+# --- 9. Ask what to install via Docker ---
+echo ""
+echo "========================================="
+echo " What would you like to install?"
+echo "========================================="
+echo "  1) OpenClaw only"
+echo "  2) Home Assistant only"
+echo "  3) Both OpenClaw and Home Assistant"
+echo ""
+read -p "Enter your choice (1/2/3): " INSTALL_CHOICE
+
+INSTALL_OPENCLAW=false
+INSTALL_HA=false
+
+case "$INSTALL_CHOICE" in
+  1) INSTALL_OPENCLAW=true ;;
+  2) INSTALL_HA=true ;;
+  3) INSTALL_OPENCLAW=true; INSTALL_HA=true ;;
+  *) echo "Invalid choice. Skipping optional installs." ;;
+esac
+
+if [ "$INSTALL_HA" = true ]; then
+  echo "Installing Home Assistant via Docker..."
+  docker run -d \
+    --name homeassistant \
+    --restart=unless-stopped \
+    --privileged \
+    --network=host \
+    -v ~/homeassistant:/config \
+    -v /run/dbus:/run/dbus:ro \
+    -e TZ=America/Los_Angeles \
+    ghcr.io/home-assistant/home-assistant:stable
+  echo "Home Assistant is running at http://<your-pi-ip>:8123"
+fi
+
+if [ "$INSTALL_OPENCLAW" = true ]; then
+  echo "OpenClaw selected — set it up via Docker after reboot."
+fi
+
+# --- 10. Install Homebrew ---
+echo "[10/10] Installing Homebrew..."
 BREW_USER="${SUDO_USER:-pi}"
 apt install -y build-essential
 su - "$BREW_USER" -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
@@ -164,7 +203,13 @@ echo " Fan: full speed (persistent)"
 echo " Installed: btop, Node.js $(node --version), Docker, Homebrew"
 echo " Removed: Firefox, LibreOffice, bloatware"
 echo ""
-echo " Ready for: Home Assistant & OpenClaw (via Docker)"
+if [ "$INSTALL_OPENCLAW" = true ] && [ "$INSTALL_HA" = true ]; then
+  echo " Installed: OpenClaw (pending setup), Home Assistant (running)"
+elif [ "$INSTALL_OPENCLAW" = true ]; then
+  echo " Installed: OpenClaw (pending setup)"
+elif [ "$INSTALL_HA" = true ]; then
+  echo " Installed: Home Assistant (running)"
+fi
 echo ""
 echo " >>> REBOOT REQUIRED for overclock settings <<<"
 echo ""
