@@ -15,7 +15,7 @@ echo "========================================="
 
 # --- 1. System Updates & Upgrades ---
 echo "[1/12] Updating and upgrading system..."
-apt update -y && apt full-upgrade -y && apt dist-upgrade -y
+apt update -y && apt -y -o Dpkg::Options::="--force-confnew" full-upgrade && apt -y -o Dpkg::Options::="--force-confnew" dist-upgrade
 apt autoremove -y && apt autoclean -y
 
 # --- 2. Set Hostname ---
