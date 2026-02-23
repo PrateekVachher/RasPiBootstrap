@@ -12,40 +12,7 @@ Automated setup script for Raspberry Pi 5. Run with `sudo bash raspi5-setup.sh`.
 6. Installs btop, Node.js LTS, Docker, Homebrew
 7. Removes bloatware (Firefox, LibreOffice, etc.)
 8. Optional: Home Assistant & OpenClaw via Docker
-9. **Caddy SSL reverse proxy** for local HTTPS access
 
-## SSL Access
+## Network Access
 
-After setup, services are available over HTTPS:
-
-| URL | Service |
-|-----|---------|
-| `https://pipi.local/ha` | Home Assistant |
-| `https://pipi.local/openclaw` | OpenClaw |
-| `https://<pi-ip>/ha` | Home Assistant (via local IP) |
-| `https://<pi-ip>/openclaw` | OpenClaw (via local IP) |
-| `https://<public-ip>/ha` | Home Assistant (via public IP) |
-| `https://<public-ip>/openclaw` | OpenClaw (via public IP) |
-
-> **Public IP access** requires port forwarding ports 80 and 443 on your router to the Pi's local IP.
-
-Caddy uses internally-generated self-signed certificates (`tls internal`). To avoid browser warnings, install the Caddy root CA on your client devices:
-
-**Windows** (run as Administrator):
-```powershell
-powershell -ExecutionPolicy Bypass -File install-cert.ps1
-```
-
-**Manual**: Visit `http://pipi.local/cert` to download the CA cert, then install it into your OS/browser trust store.
-
-### Adding more services
-
-Edit `/etc/caddy/Caddyfile` and add a new `handle_path` block:
-
-```
-handle_path /myapp/* {
-    reverse_proxy localhost:PORT
-}
-```
-
-Then reload: `sudo systemctl reload caddy`
+Services are exposed via [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) on `prateekv.dev`.

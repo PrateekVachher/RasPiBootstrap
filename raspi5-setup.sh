@@ -170,24 +170,52 @@ esac
 
 if [ "$INSTALL_HA" = true ]; then
   echo "Installing Home Assistant via Docker..."
+
+  # Pre-create config directory and configure trusted proxies for Cloudflare Tunnel
+  HA_CONFIG_DIR="${SUDO_USER:+/home/$SUDO_USER}/homeassistant"
+  HA_CONFIG_DIR="${HA_CONFIG_DIR:-~/homeassistant}"
+  mkdir -p "$HA_CONFIG_DIR"
+  cat > "$HA_CONFIG_DIR/configuration.yaml" <<EOF
+# Home Assistant configuration
+homeassistant:
+  external_url: "https://ha.prateekv.dev"
+  internal_url: "http://pipi.local:8123"
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.16.0.0/12
+    - 127.0.0.1
+EOF
+
   docker run -d \
     --name homeassistant \
     --restart=unless-stopped \
     --privileged \
     --network=host \
-    -v ~/homeassistant:/config \
+    -v "$HA_CONFIG_DIR":/config \
     -v /run/dbus:/run/dbus:ro \
     -e TZ=America/Los_Angeles \
     ghcr.io/home-assistant/home-assistant:stable
-  echo "Home Assistant is running at http://<your-pi-ip>:8123"
+  echo "Home Assistant is running:"
+  echo "  Local:    http://pipi.local:8123"
+  echo "  External: https://ha.prateekv.dev (via Cloudflare Tunnel)"
 fi
 
 if [ "$INSTALL_OPENCLAW" = true ]; then
   echo "OpenClaw selected — set it up via Docker after reboot."
 fi
 
-# --- 11. Install Homebrew ---
-echo "[11/12] Installing Homebrew..."
+# --- 11. Install Cloudflared ---
+echo "[11/12] Installing cloudflared..."
+mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
+apt update -y && apt install -y cloudflared
+echo "cloudflared version: $(cloudflared --version)"
+
+# --- 12. Install Homebrew ---
+echo "[12/12] Installing Homebrew..."
 BREW_USER="${SUDO_USER:-pi}"
 apt install -y build-essential
 su - "$BREW_USER" -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
@@ -198,128 +226,6 @@ su - "$BREW_USER" -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shelle
 su - "$BREW_USER" -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)" && brew install gcc'
 echo "Homebrew installed for user $BREW_USER"
 
-# --- 12. Install Caddy & Configure SSL Reverse Proxy ---
-echo "[12/12] Installing Caddy and configuring SSL reverse proxy..."
-apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update -y
-apt install -y caddy
-
-# Detect the Pi's local IP address
-PI_IP=$(hostname -I | awk '{print $1}')
-
-# Create the Caddyfile with SSL reverse proxy
-cat > /etc/caddy/Caddyfile <<EOF
-{
-	# Use internal self-signed certificates for local network
-	local_certs
-}
-
-# Serve via pipi.local hostname
-https://pipi.local {
-	tls internal
-
-	handle_path /ha/* {
-		reverse_proxy localhost:8123
-	}
-
-	handle_path /openclaw/* {
-		reverse_proxy localhost:18789
-	}
-
-	handle /cert {
-		root * /var/www/caddy-ca
-		rewrite * /root.crt
-		file_server
-		header Content-Disposition "attachment; filename=caddy-root.crt"
-	}
-
-	handle / {
-		respond "pipi.local — Use /ha for Home Assistant, /openclaw for OpenClaw, /cert to download CA cert" 200
-	}
-}
-
-# Serve via local IP address
-https://${PI_IP} {
-	tls internal
-
-	handle_path /ha/* {
-		reverse_proxy localhost:8123
-	}
-
-	handle_path /openclaw/* {
-		reverse_proxy localhost:18789
-	}
-
-	handle / {
-		respond "pipi — Use /ha for Home Assistant, /openclaw for OpenClaw" 200
-	}
-}
-
-# Serve via public IP address (requires port forwarding 80/443 on router)
-https://208.52.2.131 {
-	tls internal
-
-	handle_path /ha/* {
-		reverse_proxy localhost:8123
-	}
-
-	handle_path /openclaw/* {
-		reverse_proxy localhost:18789
-	}
-
-	handle / {
-		respond "pipi (public) — Use /ha for Home Assistant, /openclaw for OpenClaw" 200
-	}
-}
-EOF
-
-# Also serve the CA cert over plain HTTP so it can be downloaded without SSL warnings
-cat > /etc/caddy/Caddyfile.http <<EOF
-http://pipi.local:80 {
-	handle /cert {
-		root * /var/www/caddy-ca
-		rewrite * /root.crt
-		file_server
-		header Content-Disposition "attachment; filename=caddy-root.crt"
-	}
-	handle / {
-		respond "Visit /cert to download the CA certificate" 200
-	}
-}
-EOF
-
-# Merge HTTP config into main Caddyfile
-cat /etc/caddy/Caddyfile.http >> /etc/caddy/Caddyfile
-rm /etc/caddy/Caddyfile.http
-
-# Install the Caddy root CA into the system trust store so local clients trust it
-caddy trust 2>/dev/null || true
-
-# Export the CA cert so other devices can download and trust it
-CADDY_CA_SRC="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-CADDY_CA_DST="/var/www/caddy-ca"
-mkdir -p "$CADDY_CA_DST"
-cp "$CADDY_CA_SRC" "$CADDY_CA_DST/root.crt" 2>/dev/null || true
-
-systemctl enable caddy
-systemctl restart caddy
-
-# Wait for Caddy to generate the CA cert (first startup)
-sleep 3
-if [ ! -f "$CADDY_CA_DST/root.crt" ] && [ -f "$CADDY_CA_SRC" ]; then
-  cp "$CADDY_CA_SRC" "$CADDY_CA_DST/root.crt"
-fi
-echo "Caddy SSL reverse proxy configured"
-echo "  https://pipi.local/ha         -> Home Assistant (port 8123)"
-echo "  https://pipi.local/openclaw   -> OpenClaw (port 18789)"
-echo "  https://${PI_IP}/ha           -> Home Assistant (port 8123)"
-echo "  https://${PI_IP}/openclaw     -> OpenClaw (port 18789)"
-echo "  https://208.52.2.131/ha       -> Home Assistant (public IP)"
-echo "  https://208.52.2.131/openclaw -> OpenClaw (public IP)"
-echo "  NOTE: Public IP access requires port forwarding 80/443 on your router"
-
 echo ""
 echo "========================================="
 echo " Setup Complete!"
@@ -328,9 +234,8 @@ echo ""
 echo " Overclock: arm_freq=3000, gpu_freq=1000, over_voltage_delta=50000"
 echo " CPU Governor: performance (persistent)"
 echo " Fan: full speed (persistent)"
-echo " Installed: btop, Node.js $(node --version), Docker, Homebrew, Caddy"
+echo " Installed: btop, Node.js $(node --version), Docker, Homebrew, cloudflared"
 echo " Removed: Firefox, LibreOffice, bloatware"
-echo " SSL: https://pipi.local/ha, https://pipi.local/openclaw"
 echo ""
 if [ "$INSTALL_OPENCLAW" = true ] && [ "$INSTALL_HA" = true ]; then
   echo " Installed: OpenClaw (pending setup), Home Assistant (running)"
