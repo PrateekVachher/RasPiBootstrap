@@ -228,8 +228,15 @@ https://pipi.local {
 		reverse_proxy localhost:18789
 	}
 
+	handle /cert {
+		root * /var/www/caddy-ca
+		rewrite * /root.crt
+		file_server
+		header Content-Disposition "attachment; filename=caddy-root.crt"
+	}
+
 	handle / {
-		respond "pipi.local — Use /ha for Home Assistant, /openclaw for OpenClaw" 200
+		respond "pipi.local — Use /ha for Home Assistant, /openclaw for OpenClaw, /cert to download CA cert" 200
 	}
 }
 
@@ -268,11 +275,42 @@ https://208.52.2.131 {
 }
 EOF
 
+# Also serve the CA cert over plain HTTP so it can be downloaded without SSL warnings
+cat > /etc/caddy/Caddyfile.http <<EOF
+http://pipi.local:80 {
+	handle /cert {
+		root * /var/www/caddy-ca
+		rewrite * /root.crt
+		file_server
+		header Content-Disposition "attachment; filename=caddy-root.crt"
+	}
+	handle / {
+		respond "Visit /cert to download the CA certificate" 200
+	}
+}
+EOF
+
+# Merge HTTP config into main Caddyfile
+cat /etc/caddy/Caddyfile.http >> /etc/caddy/Caddyfile
+rm /etc/caddy/Caddyfile.http
+
 # Install the Caddy root CA into the system trust store so local clients trust it
 caddy trust 2>/dev/null || true
 
+# Export the CA cert so other devices can download and trust it
+CADDY_CA_SRC="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
+CADDY_CA_DST="/var/www/caddy-ca"
+mkdir -p "$CADDY_CA_DST"
+cp "$CADDY_CA_SRC" "$CADDY_CA_DST/root.crt" 2>/dev/null || true
+
 systemctl enable caddy
 systemctl restart caddy
+
+# Wait for Caddy to generate the CA cert (first startup)
+sleep 3
+if [ ! -f "$CADDY_CA_DST/root.crt" ] && [ -f "$CADDY_CA_SRC" ]; then
+  cp "$CADDY_CA_SRC" "$CADDY_CA_DST/root.crt"
+fi
 echo "Caddy SSL reverse proxy configured"
 echo "  https://pipi.local/ha         -> Home Assistant (port 8123)"
 echo "  https://pipi.local/openclaw   -> OpenClaw (port 18789)"

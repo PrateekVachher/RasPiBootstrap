@@ -29,7 +29,14 @@ After setup, services are available over HTTPS:
 
 > **Public IP access** requires port forwarding ports 80 and 443 on your router to the Pi's local IP.
 
-Caddy uses internally-generated self-signed certificates (`tls internal`). On first visit, your browser will show a certificate warning — accept it to proceed. To avoid the warning, install the Caddy root CA on your client devices from `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt`.
+Caddy uses internally-generated self-signed certificates (`tls internal`). To avoid browser warnings, install the Caddy root CA on your client devices:
+
+**Windows** (run as Administrator):
+```powershell
+powershell -ExecutionPolicy Bypass -File install-cert.ps1
+```
+
+**Manual**: Visit `http://pipi.local/cert` to download the CA cert, then install it into your OS/browser trust store.
 
 ### Adding more services
 
