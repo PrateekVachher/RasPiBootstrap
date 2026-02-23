@@ -15,16 +15,16 @@ https://pipi.local {
     file_server
   }
   handle / {
-    respond "pipi.local - ha.pipi.local, openclaw.pipi.local, /cert" 200
+    respond "pipi.local - :8443 for Home Assistant, :8444 for OpenClaw, /cert for CA" 200
   }
 }
 
-https://ha.pipi.local {
+https://pipi.local:8443 {
   tls internal
   reverse_proxy localhost:8123
 }
 
-https://openclaw.pipi.local {
+https://pipi.local:8444 {
   tls internal
   reverse_proxy localhost:18789
 }
@@ -52,4 +52,4 @@ https://208.52.2.131 {
 EOF
 
 mkdir -p /var/www/caddy-ca
-caddy validate --config /etc/caddy/Caddyfile && systemctl restart caddy && sleep 3 && cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /var/www/caddy-ca/root.crt && chmod 644 /var/www/caddy-ca/root.crt && chown caddy:caddy /var/www/caddy-ca/root.crt && echo "Done! Access https://ha.pipi.local and https://openclaw.pipi.local"
+caddy validate --config /etc/caddy/Caddyfile && systemctl restart caddy && sleep 3 && cp /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /var/www/caddy-ca/root.crt && chmod 644 /var/www/caddy-ca/root.crt && chown caddy:caddy /var/www/caddy-ca/root.crt && echo "Done! Access https://pipi.local:8443 (HA) and https://pipi.local:8444 (OpenClaw)"
