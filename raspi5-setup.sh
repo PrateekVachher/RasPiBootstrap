@@ -160,17 +160,19 @@ echo "  1) OpenClaw only"
 echo "  2) Home Assistant only"
 echo "  3) Both OpenClaw and Home Assistant"
 echo ""
-read -p "Enter your choice (1/2/3): " INSTALL_CHOICE
 
 INSTALL_OPENCLAW=false
 INSTALL_HA=false
 
-case "$INSTALL_CHOICE" in
-  1) INSTALL_OPENCLAW=true ;;
-  2) INSTALL_HA=true ;;
-  3) INSTALL_OPENCLAW=true; INSTALL_HA=true ;;
-  *) echo "Invalid choice. Skipping optional installs." ;;
-esac
+while true; do
+  read -p "Enter your choice (1/2/3): " INSTALL_CHOICE
+  case "$INSTALL_CHOICE" in
+    1) INSTALL_OPENCLAW=true; break ;;
+    2) INSTALL_HA=true; break ;;
+    3) INSTALL_OPENCLAW=true; INSTALL_HA=true; break ;;
+    *) echo "Invalid choice. Please enter 1, 2, or 3." ;;
+  esac
+done
 
 if [ "$INSTALL_HA" = true ]; then
   echo "Installing Home Assistant via Docker..."
