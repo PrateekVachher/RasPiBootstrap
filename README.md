@@ -24,8 +24,8 @@ After setup, services are available over HTTPS:
 | `https://pipi.local/openclaw` | OpenClaw |
 | `https://<pi-ip>/ha` | Home Assistant (via local IP) |
 | `https://<pi-ip>/openclaw` | OpenClaw (via local IP) |
-| `https://208.52.2.131/ha` | Home Assistant (via public IP) |
-| `https://208.52.2.131/openclaw` | OpenClaw (via public IP) |
+| `https://<public-ip>/ha` | Home Assistant (via public IP) |
+| `https://<public-ip>/openclaw` | OpenClaw (via public IP) |
 
 > **Public IP access** requires port forwarding ports 80 and 443 on your router to the Pi's local IP.
 
