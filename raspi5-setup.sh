@@ -88,13 +88,21 @@ systemctl enable fan-full-speed.service
 
 # --- 6. Install btop ---
 echo "[6/12] Installing btop..."
-apt install -y btop
+if command -v btop &>/dev/null; then
+  echo "btop already installed, skipping."
+else
+  apt install -y btop
+fi
 
 # --- 7. Install Latest Node.js (LTS via NodeSource) ---
 echo "[7/12] Installing latest Node.js LTS..."
-apt remove -y nodejs npm 2>/dev/null || true
-curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-apt install -y nodejs
+if command -v node &>/dev/null; then
+  echo "Node.js already installed ($(node --version)), skipping."
+else
+  apt remove -y nodejs npm 2>/dev/null || true
+  curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  apt install -y nodejs
+fi
 echo "Node.js version: $(node --version)"
 echo "npm version: $(npm --version)"
 
@@ -175,13 +183,17 @@ while true; do
 done
 
 if [ "$INSTALL_HA" = true ]; then
-  echo "Installing Home Assistant via Docker..."
+  if docker ps -a --format '{{.Names}}' | grep -q '^homeassistant$'; then
+    echo "Home Assistant container already exists, skipping."
+  else
+    echo "Installing Home Assistant via Docker..."
 
-  # Pre-create config directory and configure trusted proxies for Cloudflare Tunnel
-  HA_CONFIG_DIR="${SUDO_USER:+/home/$SUDO_USER}/homeassistant"
-  HA_CONFIG_DIR="${HA_CONFIG_DIR:-~/homeassistant}"
-  mkdir -p "$HA_CONFIG_DIR"
-  cat > "$HA_CONFIG_DIR/configuration.yaml" <<EOF
+    # Pre-create config directory and configure trusted proxies for Cloudflare Tunnel
+    HA_CONFIG_DIR="${SUDO_USER:+/home/$SUDO_USER}/homeassistant"
+    HA_CONFIG_DIR="${HA_CONFIG_DIR:-~/homeassistant}"
+    mkdir -p "$HA_CONFIG_DIR"
+    if [ ! -f "$HA_CONFIG_DIR/configuration.yaml" ]; then
+      cat > "$HA_CONFIG_DIR/configuration.yaml" <<EOF
 # Home Assistant configuration
 homeassistant:
   external_url: "https://ha.prateekv.dev"
@@ -193,16 +205,18 @@ http:
     - 172.16.0.0/12
     - 127.0.0.1
 EOF
+    fi
 
-  docker run -d \
-    --name homeassistant \
-    --restart=unless-stopped \
-    --privileged \
-    --network=host \
-    -v "$HA_CONFIG_DIR":/config \
-    -v /run/dbus:/run/dbus:ro \
-    -e TZ=America/Los_Angeles \
-    ghcr.io/home-assistant/home-assistant:stable
+    docker run -d \
+      --name homeassistant \
+      --restart=unless-stopped \
+      --privileged \
+      --network=host \
+      -v "$HA_CONFIG_DIR":/config \
+      -v /run/dbus:/run/dbus:ro \
+      -e TZ=America/Los_Angeles \
+      ghcr.io/home-assistant/home-assistant:stable
+  fi
   echo "Home Assistant is running:"
   echo "  Local:    http://pipi.local:8123"
   echo "  External: https://ha.prateekv.dev (via Cloudflare Tunnel)"
@@ -214,22 +228,30 @@ fi
 
 # --- 11. Install Cloudflared ---
 echo "[11/12] Installing cloudflared..."
-mkdir -p --mode=0755 /usr/share/keyrings
-curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
-apt update -y && apt install -y cloudflared
+if command -v cloudflared &>/dev/null; then
+  echo "cloudflared already installed, skipping."
+else
+  mkdir -p --mode=0755 /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+  echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
+  apt update -y && apt install -y cloudflared
+fi
 echo "cloudflared version: $(cloudflared --version)"
 
 # --- 12. Install Homebrew ---
 echo "[12/12] Installing Homebrew..."
 BREW_USER="${SUDO_USER:-pi}"
-apt install -y build-essential
-su - "$BREW_USER" -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-# Add Homebrew to the user's PATH
-BREW_HOME="/home/$BREW_USER"
-su - "$BREW_USER" -c "echo >> $BREW_HOME/.bashrc"
-su - "$BREW_USER" -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)\"' >> $BREW_HOME/.bashrc"
-su - "$BREW_USER" -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)" && brew install gcc'
+if su - "$BREW_USER" -c 'command -v brew' &>/dev/null; then
+  echo "Homebrew already installed, skipping."
+else
+  apt install -y build-essential
+  su - "$BREW_USER" -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+  # Add Homebrew to the user's PATH
+  BREW_HOME="/home/$BREW_USER"
+  su - "$BREW_USER" -c "echo >> $BREW_HOME/.bashrc"
+  su - "$BREW_USER" -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)\"' >> $BREW_HOME/.bashrc"
+  su - "$BREW_USER" -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)" && brew install gcc'
+fi
 echo "Homebrew installed for user $BREW_USER"
 
 echo ""
