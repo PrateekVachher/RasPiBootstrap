@@ -1,6 +1,7 @@
 #!/bin/bash
 # Raspberry Pi 5 Setup Script
 # Run as: sudo bash raspi5-setup.sh
+VERSION="1.0.0"
 
 set -e
 
@@ -10,7 +11,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "========================================="
-echo " Raspberry Pi 5 Setup Script"
+echo " Raspberry Pi 5 Setup Script v${VERSION}"
 echo "========================================="
 
 # --- 1. System Updates & Upgrades ---
