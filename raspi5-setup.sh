@@ -133,7 +133,11 @@ apt autoremove -y && apt autoclean -y
 
 # --- 9. Install Docker ---
 echo "[9/12] Installing Docker..."
-curl -fsSL https://get.docker.com | bash
+if command -v docker &>/dev/null; then
+  echo "Docker already installed, skipping install."
+else
+  curl -fsSL https://get.docker.com | bash
+fi
 usermod -aG docker pi 2>/dev/null || true
 # Add the current sudo user to docker group as well
 if [ -n "$SUDO_USER" ]; then
