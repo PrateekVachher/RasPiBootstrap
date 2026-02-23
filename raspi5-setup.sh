@@ -205,6 +205,7 @@ http:
   trusted_proxies:
     - 172.16.0.0/12
     - 127.0.0.1
+    - ::1
 EOF
     fi
 
