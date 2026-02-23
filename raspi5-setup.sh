@@ -196,6 +196,8 @@ if [ "$INSTALL_HA" = true ]; then
     if [ ! -f "$HA_CONFIG_DIR/configuration.yaml" ]; then
       cat > "$HA_CONFIG_DIR/configuration.yaml" <<EOF
 # Home Assistant configuration
+default_config:
+
 homeassistant:
   external_url: "https://ha.prateekv.dev"
   internal_url: "http://pipi.local:8123"
