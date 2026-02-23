@@ -1,7 +1,7 @@
 #!/bin/bash
 # Raspberry Pi 5 Setup Script
 # Run as: sudo bash raspi5-setup.sh
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 set -e
 
@@ -33,6 +33,7 @@ CONFIG="/boot/firmware/config.txt"
 sed -i '/^arm_freq=/d' "$CONFIG"
 sed -i '/^gpu_freq=/d' "$CONFIG"
 sed -i '/^over_voltage_delta=/d' "$CONFIG"
+sed -i '/^# --- Overclock Settings ---$/d' "$CONFIG"
 
 # Append overclock settings
 cat >> "$CONFIG" <<EOF
@@ -84,7 +85,6 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
 systemctl enable fan-full-speed.service
 
 # --- 6. Install btop ---
@@ -168,18 +168,20 @@ echo "========================================="
 echo "  1) OpenClaw only"
 echo "  2) Home Assistant only"
 echo "  3) Both OpenClaw and Home Assistant"
+echo "  4) Skip"
 echo ""
 
 INSTALL_OPENCLAW=false
 INSTALL_HA=false
 
 while true; do
-  read -p "Enter your choice (1/2/3): " INSTALL_CHOICE
+  read -p "Enter your choice (1/2/3/4): " INSTALL_CHOICE < /dev/tty
   case "$INSTALL_CHOICE" in
     1) INSTALL_OPENCLAW=true; break ;;
     2) INSTALL_HA=true; break ;;
     3) INSTALL_OPENCLAW=true; INSTALL_HA=true; break ;;
-    *) echo "Invalid choice. Please enter 1, 2, or 3." ;;
+    4) break ;;
+    *) echo "Invalid choice. Please enter 1, 2, 3, or 4." ;;
   esac
 done
 
@@ -190,8 +192,8 @@ if [ "$INSTALL_HA" = true ]; then
     echo "Installing Home Assistant via Docker..."
 
     # Pre-create config directory and configure trusted proxies for Cloudflare Tunnel
-    HA_CONFIG_DIR="${SUDO_USER:+/home/$SUDO_USER}/homeassistant"
-    HA_CONFIG_DIR="${HA_CONFIG_DIR:-~/homeassistant}"
+    HA_USER_HOME="/home/${SUDO_USER:-$(whoami)}"
+    HA_CONFIG_DIR="$HA_USER_HOME/homeassistant"
     mkdir -p "$HA_CONFIG_DIR"
     if [ ! -f "$HA_CONFIG_DIR/configuration.yaml" ]; then
       cat > "$HA_CONFIG_DIR/configuration.yaml" <<EOF
@@ -229,6 +231,14 @@ fi
 if [ "$INSTALL_OPENCLAW" = true ]; then
   echo "OpenClaw selected — set it up via Docker after reboot."
 fi
+
+# --- Install Avahi for mDNS device discovery ---
+if ! command -v avahi-daemon &>/dev/null; then
+  echo "Installing Avahi for network device discovery..."
+  apt install -y avahi-daemon avahi-utils
+fi
+systemctl enable avahi-daemon
+systemctl start avahi-daemon
 
 # --- 11. Install Cloudflared ---
 echo "[11/12] Installing cloudflared..."
@@ -279,7 +289,7 @@ fi
 echo ""
 echo " >>> REBOOT REQUIRED for overclock settings <<<"
 echo ""
-read -p "Reboot now? (y/n): " REBOOT
+read -p "Reboot now? (y/n): " REBOOT < /dev/tty
 if [ "$REBOOT" = "y" ] || [ "$REBOOT" = "Y" ]; then
   reboot
 fi
